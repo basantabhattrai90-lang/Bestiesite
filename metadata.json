@@ -1,0 +1,6 @@
+{
+  "name": "Bestie Secret Quiz",
+  "description": "A secret friendship quiz for two best friends with private answers, real-time comparison, photo reveal, and admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

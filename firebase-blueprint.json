@@ -1,0 +1,200 @@
+{
+  "entities": {
+    "Quiz": {
+      "title": "Quiz",
+      "description": "Friendship quiz questions and configuration",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title of the quiz",
+          "maxLength": 100
+        },
+        "welcomeMessage": {
+          "type": "string",
+          "description": "Optional welcome message",
+          "maxLength": 300
+        },
+        "questions": {
+          "type": "array",
+          "description": "Array of 15 multiple choice questions"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["title", "questions"]
+    },
+    "QuizSession": {
+      "title": "QuizSession",
+      "description": "A quiz session between two friends",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Unique session identifier",
+          "maxLength": 64
+        },
+        "player1Name": {
+          "type": "string",
+          "description": "Name or nickname of player 1",
+          "maxLength": 50
+        },
+        "player2Name": {
+          "type": "string",
+          "description": "Name or nickname of player 2",
+          "maxLength": 50
+        },
+        "player1Photo": {
+          "type": "string",
+          "description": "Photo URL or data for player 1",
+          "maxLength": 500000
+        },
+        "player2Photo": {
+          "type": "string",
+          "description": "Photo URL or data for player 2",
+          "maxLength": 500000
+        },
+        "player1Submitted": {
+          "type": "boolean",
+          "description": "Whether player 1 has submitted all answers"
+        },
+        "player2Submitted": {
+          "type": "boolean",
+          "description": "Whether player 2 has submitted all answers"
+        },
+        "bothSubmitted": {
+          "type": "boolean",
+          "description": "Server/authoritative flag indicating both players have submitted"
+        },
+        "player2Joined": {
+          "type": "boolean",
+          "description": "Whether player 2 has joined the room"
+        },
+        "quizTheme": {
+          "type": "string",
+          "description": "Theme of questions (random, hilarious, wholesome, adventures)"
+        },
+        "questions": {
+          "type": "array",
+          "description": "The 15 custom or AI questions for this quiz session"
+        },
+        "mode": {
+          "type": "string",
+          "description": "Session mode: single_phone or two_device",
+          "enum": ["single_phone", "two_device"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["sessionId", "player1Name", "player2Name", "player1Submitted", "player2Submitted", "bothSubmitted"]
+    },
+    "PlayerAnswer": {
+      "title": "PlayerAnswer",
+      "description": "Private answers submitted by a player",
+      "type": "object",
+      "properties": {
+        "playerId": {
+          "type": "string",
+          "description": "player1 or player2",
+          "enum": ["player1", "player2"]
+        },
+        "answers": {
+          "type": "object",
+          "description": "Map of question ID or index to chosen option"
+        },
+        "submittedAt": {
+          "type": "string",
+          "description": "Timestamp when player submitted"
+        }
+      },
+      "required": ["playerId", "answers"]
+    },
+    "SessionReveal": {
+      "title": "SessionReveal",
+      "description": "Computed final reveal comparison available only after both submit",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID"
+        },
+        "matchingScore": {
+          "type": "number",
+          "description": "Total matches count"
+        },
+        "totalQuestions": {
+          "type": "number",
+          "description": "Total number of questions"
+        },
+        "matchingPercentage": {
+          "type": "number",
+          "description": "Percentage of matching answers"
+        },
+        "player1Answers": {
+          "type": "object",
+          "description": "Map of question index to chosen option for player 1"
+        },
+        "player2Answers": {
+          "type": "object",
+          "description": "Map of question index to chosen option for player 2"
+        },
+        "revealedAt": {
+          "type": "string",
+          "description": "Timestamp of reveal"
+        }
+      },
+      "required": ["sessionId", "matchingScore", "totalQuestions", "matchingPercentage", "player1Answers", "player2Answers"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized admin entry",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Admin email address"
+        },
+        "role": {
+          "type": "string",
+          "description": "Admin role",
+          "enum": ["owner", "admin"]
+        }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/quizzes/{quizId}": {
+      "schema": { "$ref": "#/entities/Quiz" },
+      "description": "Stores quiz definitions and 15 questions"
+    },
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/QuizSession" },
+      "description": "Quiz sessions and completion states"
+    },
+    "/sessions/{sessionId}/player1Answers/{docId}": {
+      "schema": { "$ref": "#/entities/PlayerAnswer" },
+      "description": "Private answers of Player 1"
+    },
+    "/sessions/{sessionId}/player2Answers/{docId}": {
+      "schema": { "$ref": "#/entities/PlayerAnswer" },
+      "description": "Private answers of Player 2"
+    },
+    "/sessions/{sessionId}/reveals/{docId}": {
+      "schema": { "$ref": "#/entities/SessionReveal" },
+      "description": "Unlocked reveal data with both answers and score"
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Admin whitelist collection"
+    }
+  }
+}

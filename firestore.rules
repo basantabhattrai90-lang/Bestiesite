@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Pillar 1)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Helper Primitives (Pillar 3 & 4)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'anonymous');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'basantabhattrai90@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Validation: Quiz
+    function isValidQuiz(data) {
+      return data.title is string && data.title.size() <= 100
+        && data.questions is list && data.questions.size() <= 20;
+    }
+
+    // Entity Validation: QuizSession
+    function isValidQuizSession(data) {
+      return data.sessionId is string && isValidId(data.sessionId)
+        && data.player1Name is string && data.player1Name.size() <= 50
+        && data.player2Name is string && data.player2Name.size() <= 50
+        && data.player1Submitted is bool
+        && data.player2Submitted is bool
+        && data.bothSubmitted is bool;
+    }
+
+    // Entity Validation: PlayerAnswer
+    function isValidPlayerAnswer(data) {
+      return data.playerId is string && (data.playerId == 'player1' || data.playerId == 'player2')
+        && data.answers is map;
+    }
+
+    // Entity Validation: SessionReveal
+    function isValidReveal(data) {
+      return data.sessionId is string && isValidId(data.sessionId)
+        && data.matchingScore is number
+        && data.totalQuestions is number
+        && data.matchingPercentage is number
+        && data.player1Answers is map
+        && data.player2Answers is map;
+    }
+
+    // Connection Test Collection
+    match /test/{docId} {
+      allow get: if true;
+    }
+
+    // Admins Collection
+    match /admins/{adminUid} {
+      allow read: if isAdmin();
+      allow write: if false; // Managed through trusted administration only
+    }
+
+    // Quizzes Collection
+    match /quizzes/{quizId} {
+      allow get, list: if true; // Publicly readable for active quizzes
+      allow create, update, delete: if isAdmin() && isValidQuiz(incoming());
+    }
+
+    // Sessions Collection
+    match /sessions/{sessionId} {
+      allow get: if isValidId(sessionId);
+      allow list: if isAdmin();
+      allow create: if isValidId(sessionId) && isValidQuizSession(incoming());
+      allow update: if isValidId(sessionId) && isValidQuizSession(incoming()) && (
+        isAdmin() ||
+        // Action: Player 2 joins room
+        (incoming().diff(existing()).affectedKeys().hasOnly(['player2Name', 'player2Photo', 'player2Joined', 'updatedAt'])) ||
+        // Action: Player 1 completion
+        (incoming().diff(existing()).affectedKeys().hasOnly(['player1Submitted', 'bothSubmitted', 'updatedAt']) && !existing().bothSubmitted) ||
+        // Action: Player 2 completion
+        (incoming().diff(existing()).affectedKeys().hasOnly(['player2Submitted', 'bothSubmitted', 'updatedAt']) && !existing().bothSubmitted) ||
+        // Action: Reset session
+        (incoming().diff(existing()).affectedKeys().hasOnly(['player1Submitted', 'player2Submitted', 'bothSubmitted', 'updatedAt']))
+      );
+      allow delete: if isAdmin();
+
+      // Subcollection: Player 1 Answers (Strictly private before reveal)
+      match /player1Answers/{docId} {
+        // Can be read if both players submitted or user is admin
+        allow get: if isValidId(sessionId) && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.bothSubmitted == true
+        );
+        allow create, update: if isValidId(sessionId) && isValidPlayerAnswer(incoming()) && incoming().playerId == 'player1';
+        allow delete: if isAdmin();
+      }
+
+      // Subcollection: Player 2 Answers (Strictly private before reveal)
+      match /player2Answers/{docId} {
+        // Can be read if both players submitted or user is admin
+        allow get: if isValidId(sessionId) && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.bothSubmitted == true
+        );
+        allow create, update: if isValidId(sessionId) && isValidPlayerAnswer(incoming()) && incoming().playerId == 'player2';
+        allow delete: if isAdmin();
+      }
+
+      // Subcollection: Revealed Answers & Score
+      match /reveals/{docId} {
+        allow get: if isValidId(sessionId) && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.bothSubmitted == true
+        );
+        allow create, update: if isValidId(sessionId) && isValidReveal(incoming()) && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.bothSubmitted == true
+        );
+        allow delete: if isAdmin();
+      }
+    }
+  }
+}
